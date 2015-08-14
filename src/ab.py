@@ -43,7 +43,14 @@ class result(object):
 def test():
     pass
 
+def error_handler(tip):
+    print(tip)
+    sys.exit(2)
+
 def arguments_parse():
+    """
+    process the cmd arguments
+    """
     params = arguments()
     try:
         opts, args = getopt.getopt(sys.argv[1:], "n:c:t:s:T:Vh", [])
@@ -53,10 +60,28 @@ def arguments_parse():
         sys.exit(2)
 
     for arg, val in opts:
-        if arg == "-n" : params.requests_count = int(val)
-        if arg == "-c" : params.concurrency = int(val)
-        if arg == "-t" : params.timelimit = int(val)
-        if arg == "-s" : params.timeout = int(val)
+        if arg == "-n": 
+            try:
+                params.requests_count = int(val)
+            except:
+                error_handler("invalid number of requests [%s]" %val)
+        if arg == "-c":
+            try:
+                params.concurrency = int(val)
+            except:
+                error_handler("invalid number of concurrency [%s]" %val)
+        if arg == "-t":
+            try:
+                params.timelimit = int(val)
+            except:
+                error_handler("invalid number of timelimit [%s]" %val)
+
+        if arg == "-s":
+            try:
+                params.timeout = int(val)
+            except:
+                error_handler("invalid number of timeout [%s]" %val)
+
         if arg == "-T" : params.content_type = val
         if arg == "-h" : params.print_usage = True
         if arg == "-V" : params.print_version = True
@@ -66,8 +91,7 @@ def arguments_parse():
     if len(args) == 1:
         params.url = args[0]
     else:
-        print("ab: wrong number of arguments")
-        sys.exit(2)
+        error_handler("ab: wrong number of arguments")
 
     if params.print_version:
         print_version()
