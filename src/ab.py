@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import getopt
 import sys
+import re
 
 program_info = 'ab.py is python port of ab'
 version = '0.0.1'
@@ -9,7 +10,6 @@ copyright = 'Copyright 2015 tom zhao'
 class connections(object):
     def __init__(self):
         pass
-
 
 # the cmd input arguments.
 class arguments(object):
@@ -32,20 +32,31 @@ class  connection_times(object):
     #time           time for connection
 
 # the result of test
-class result(object):
+class ab_result(object):
     def __init__(self):
         pass
 
     def print_result(params):
         pass
-    
  
-def test():
-    pass
+def test(params):
+    ret = ab_result()
+    return ret
 
 def error_handler(tip):
-    print(tip)
+    print("%s: %s" %(sys.argv[0], tip))
+    usage()
     sys.exit(2)
+
+def check_arguments(params):
+    if params.concurrency > params.requests_count:
+        error_handler("Cannot use concurrency level greater than total number of requests")
+    #invalid url
+    if params.concurrency < 0:
+        error_handler("Invalid concurrency")
+    p = re.compile('^http://[\d\-a-zA-Z]+(\.[\d\-a-zA-Z]+)*/.*$')
+    if p.match(params.url):
+        error_handler("invalid URL")
 
 def arguments_parse():
     """
@@ -90,8 +101,6 @@ def arguments_parse():
     
     if len(args) == 1:
         params.url = args[0]
-    else:
-        error_handler("ab: wrong number of arguments")
 
     if params.print_version:
         print_version()
@@ -99,11 +108,11 @@ def arguments_parse():
     if params.print_usage:
         usage(sys.argv[0])
         sys.exit(2)       
-    
+    check_arguments(params)
     return params
 
 def print_version():
-    print("%s, Version %s \n %s" %(program_info, version, copyright))
+    print("%s, Version %s \n%s" %(program_info, version, copyright))
 
 def usage(prog_name):
     print("Usage: %s [options] [http[s]://]hostname[:port]/path\n" %prog_name)
@@ -125,7 +134,8 @@ def usage(prog_name):
 
 def main():
     args = arguments_parse()
-    
+    ab_ret = test(args)
+    ab_ret.print_result()
 
 if __name__ == '__main__':
     main() 
