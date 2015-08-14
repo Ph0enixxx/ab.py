@@ -2,6 +2,7 @@
 import getopt
 import sys
 import re
+import select
 
 program_info = 'ab.py is python port of ab'
 version = '0.0.1'
