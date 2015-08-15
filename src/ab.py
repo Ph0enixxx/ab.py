@@ -7,10 +7,13 @@ import select
 program_info = 'ab.py is python port of ab'
 version = '0.0.1'
 copyright = 'Copyright 2015 tom zhao'
+
+
 # control the connectins
 class connections(object):
     def __init__(self):
         pass
+
 
 # the cmd input arguments.
 class arguments(object):
@@ -25,12 +28,14 @@ class arguments(object):
         self.print_version = False
         self.print_usage = False
 
+
 class  connection_times(object):
     __slots__ = ('start_time', 'wait_time', 'con_time', 'time')
     #start_time   time of starting the connection 
     #wait_time     time of between request and response.
     #connect_time   time to connect
     #time           time for connection
+
 
 # the result of test
 class ab_result(object):
@@ -40,6 +45,7 @@ class ab_result(object):
     def print_result(params):
         pass
  
+
 def test(params):
     ret = ab_result()
     return ret
