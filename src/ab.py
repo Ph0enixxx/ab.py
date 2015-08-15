@@ -29,12 +29,12 @@ class arguments(object):
         self.print_usage = False
 
 
-class  connection_times(object):
+class connection_times(object):
     __slots__ = ('start_time', 'wait_time', 'con_time', 'time')
-    #start_time   time of starting the connection 
-    #wait_time     time of between request and response.
-    #connect_time   time to connect
-    #time           time for connection
+    # start_time   time of starting the connection
+    # wait_time     time of between request and response.
+    # connect_time   time to connect
+    # time           time for connection
 
 
 # the result of test
@@ -44,26 +44,30 @@ class ab_result(object):
 
     def print_result(params):
         pass
- 
+
 
 def test(params):
     ret = ab_result()
     return ret
 
+
 def error_handler(tip):
-    print("%s: %s" %(sys.argv[0], tip))
+    print("%s: %s" % (sys.argv[0], tip))
     usage()
     sys.exit(2)
 
+
 def check_arguments(params):
     if params.concurrency > params.requests_count:
-        error_handler("Cannot use concurrency level greater than total number of requests")
-    #invalid url
+        error_handler("Cannot use concurrency level greater than total number \
+                       of requests")
+    # invalid url
     if params.concurrency < 0:
         error_handler("Invalid concurrency")
     p = re.compile('^http://[\d\-a-zA-Z]+(\.[\d\-a-zA-Z]+)*/.*$')
     if p.match(params.url):
         error_handler("invalid URL")
+
 
 def arguments_parse():
     """
@@ -78,34 +82,37 @@ def arguments_parse():
         sys.exit(2)
 
     for arg, val in opts:
-        if arg == "-n": 
+        if arg == "-n":
             try:
                 params.requests_count = int(val)
             except:
-                error_handler("invalid number of requests [%s]" %val)
+                error_handler("invalid number of requests [%s]" % val)
         if arg == "-c":
             try:
                 params.concurrency = int(val)
             except:
-                error_handler("invalid number of concurrency [%s]" %val)
+                error_handler("invalid number of concurrency [%s]" % val)
         if arg == "-t":
             try:
                 params.timelimit = int(val)
             except:
-                error_handler("invalid number of timelimit [%s]" %val)
+                error_handler("invalid number of timelimit [%s]" % val)
 
         if arg == "-s":
             try:
                 params.timeout = int(val)
             except:
-                error_handler("invalid number of timeout [%s]" %val)
+                error_handler("invalid number of timeout [%s]" % val)
 
-        if arg == "-T" : params.content_type = val
-        if arg == "-h" : params.print_usage = True
-        if arg == "-V" : params.print_version = True
-        if arg == "-k" : params.keep_alive = True
+        if arg == "-T":
+            params.content_type = val
+        if arg == "-h":
+            params.print_usage = True
+        if arg == "-V":
+            params.print_version = True
+        if arg == "-k":
+            params.keep_alive = True
 
-    
     if len(args) == 1:
         params.url = args[0]
 
@@ -114,15 +121,17 @@ def arguments_parse():
         sys.exit(2)
     if params.print_usage:
         usage(sys.argv[0])
-        sys.exit(2)       
+        sys.exit(2)
     check_arguments(params)
     return params
 
+
 def print_version():
-    print("%s, Version %s \n%s" %(program_info, version, copyright))
+    print("%s, Version %s \n%s" % (program_info, version, copyright))
+
 
 def usage(prog_name):
-    print("Usage: %s [options] [http[s]://]hostname[:port]/path\n" %prog_name)
+    print("Usage: %s [options] [http[s]://]hostname[:port]/path\n" % prog_name)
     print("Options are:")
     print("""
     -n requests     Number of requests to perform
@@ -139,12 +148,11 @@ def usage(prog_name):
     -h              Display usage information (this message)
     """)
 
+
 def main():
     args = arguments_parse()
     ab_ret = test(args)
     ab_ret.print_result()
 
 if __name__ == '__main__':
-    main() 
-
-
+    main()
