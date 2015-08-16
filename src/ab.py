@@ -4,7 +4,8 @@ import sys
 import re
 import select
 
-program_info = 'ab.py is python port of ab'
+program_name = ''
+program_info = '%s is python port of ab' % program_name
 version = '0.0.1'
 copyright = 'Copyright 2015 tom zhao'
 
@@ -17,7 +18,10 @@ class connections(object):
 
 # the cmd input arguments.
 class arguments(object):
-    def __init__(self):
+    """
+    arguments..
+    """
+    def __init__(self, argv):
         self.requests_count = 1
         self.concurrency = 1
         self.timelimit = 0
@@ -27,6 +31,73 @@ class arguments(object):
         self.keep_alive = False
         self.print_version = False
         self.print_usage = False
+        # parse the argv..
+        self.arguments_parse(argv)
+
+    def check_arguments(self):
+        if self.concurrency > self.requests_count:
+            error_handler("Cannot use concurrency level greater than total number \
+                           of requests")
+        # invalid url
+        if self.concurrency < 0:
+            error_handler("Invalid concurrency")
+        p = re.compile('^http://[\d\-a-zA-Z]+(\.[\d\-a-zA-Z]+)*/.*')
+        if not p.match(self.url):
+            error_handler("invalid URL")
+
+    def arguments_parse(self, argv):
+        """
+        process the cmd arguments
+        """
+        try:
+            opts, args = getopt.getopt(argv, "n:c:t:s:T:Vh", [])
+        except getopt.GetoptError as err:
+            print("ab.py: wrong number of arguments")
+            usage()
+            sys.exit(2)
+
+        for arg, val in opts:
+            if arg == "-n":
+                try:
+                    self.requests_count = int(val)
+                except:
+                    error_handler("invalid number of requests [%s]" % val)
+            if arg == "-c":
+                try:
+                    self.concurrency = int(val)
+                except:
+                    error_handler("invalid number of concurrency [%s]" % val)
+            if arg == "-t":
+                try:
+                    self.timelimit = int(val)
+                except:
+                    error_handler("invalid number of timelimit [%s]" % val)
+
+            if arg == "-s":
+                try:
+                    self.timeout = int(val)
+                except:
+                    error_handler("invalid number of timeout [%s]" % val)
+
+            if arg == "-T":
+                self.content_type = val
+            if arg == "-h":
+                self.print_usage = True
+            if arg == "-V":
+                self.print_version = True
+            if arg == "-k":
+                self.keep_alive = True
+
+        if len(args) == 1:
+            self.url = args[0]
+
+        if self.print_version:
+            print_version()
+            sys.exit(2)
+        if self.print_usage:
+            usage()
+            sys.exit(2)
+        self.check_arguments()
 
 
 class connection_times(object):
@@ -52,85 +123,16 @@ def test(params):
 
 
 def error_handler(tip):
-    print("%s: %s" % (sys.argv[0], tip))
+    print("%s: %s" % (program_name, tip))
     usage()
     sys.exit(2)
-
-
-def check_arguments(params):
-    if params.concurrency > params.requests_count:
-        error_handler("Cannot use concurrency level greater than total number \
-                       of requests")
-    # invalid url
-    if params.concurrency < 0:
-        error_handler("Invalid concurrency")
-    p = re.compile('^http://[\d\-a-zA-Z]+(\.[\d\-a-zA-Z]+)*/.*$')
-    if p.match(params.url):
-        error_handler("invalid URL")
-
-
-def arguments_parse():
-    """
-    process the cmd arguments
-    """
-    params = arguments()
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "n:c:t:s:T:Vh", [])
-    except getopt.GetoptError as err:
-        print("ab.py: wrong number of arguments")
-        usage(sys.argv[0])
-        sys.exit(2)
-
-    for arg, val in opts:
-        if arg == "-n":
-            try:
-                params.requests_count = int(val)
-            except:
-                error_handler("invalid number of requests [%s]" % val)
-        if arg == "-c":
-            try:
-                params.concurrency = int(val)
-            except:
-                error_handler("invalid number of concurrency [%s]" % val)
-        if arg == "-t":
-            try:
-                params.timelimit = int(val)
-            except:
-                error_handler("invalid number of timelimit [%s]" % val)
-
-        if arg == "-s":
-            try:
-                params.timeout = int(val)
-            except:
-                error_handler("invalid number of timeout [%s]" % val)
-
-        if arg == "-T":
-            params.content_type = val
-        if arg == "-h":
-            params.print_usage = True
-        if arg == "-V":
-            params.print_version = True
-        if arg == "-k":
-            params.keep_alive = True
-
-    if len(args) == 1:
-        params.url = args[0]
-
-    if params.print_version:
-        print_version()
-        sys.exit(2)
-    if params.print_usage:
-        usage(sys.argv[0])
-        sys.exit(2)
-    check_arguments(params)
-    return params
 
 
 def print_version():
     print("%s, Version %s \n%s" % (program_info, version, copyright))
 
 
-def usage(prog_name):
+def usage(prog_name=program_name):
     print("Usage: %s [options] [http[s]://]hostname[:port]/path\n" % prog_name)
     print("Options are:")
     print("""
@@ -150,9 +152,10 @@ def usage(prog_name):
 
 
 def main():
-    args = arguments_parse()
+    args = arguments(sys.argv[1:])
     ab_ret = test(args)
     ab_ret.print_result()
 
 if __name__ == '__main__':
+    program_name = sys.argv[0]
     main()
