@@ -11,6 +11,9 @@ program_info = '%s is python port of ab' % program_name
 version = '0.0.1'
 copyright = 'Copyright 2015 tom zhao'
 
+from gevent import monkey
+monkey.patch_socket()
+
 
 # the cmd input arguments.
 class arguments(object):
@@ -127,15 +130,42 @@ class ab_result(object):
         self.stats = []
         self.cur_count = 0
         self.begin_time = time.time()
+        self.end_time = 0
+        self.doc_len = 0
+        self.done = 0
+        self.total_doc_len = 0
+        self.failed = 0
+        self.server_software = ""
 
     def print_result(self, params):
-        print self.stats
-        print self.cur_count
+        print("")
+        print("Server Software:        {0}".format(self.server_software))
+        print("Server Hostname:        {0}".format(params.host))
+        print("Server Port:            {0}".format(params.port))
+        print("")
+        print("Document Path:          {0}".format(params.path))
+        print("Document Length:        {0}".format(self.doc_len))
+        print("")
+        print("Concurrency Level:      {0}".format(params.concurrency))
+        print("Time taken for tests:   {0} seconds".format(self.end_time - self.begin_time))
+        print("Complete requests:      {0}".format(self.done))
+        print("Failed requests:        {0}".format(self.failed))
+        print("Write errors:           {0}".format(self.failed))
+        print("HTML transferred:       {0} bytes".format(self.total_doc_len))
+
+    def end(self):
+        self.end_time = time.time()
+
 
 def http_test(params, ret):
     for i in xrange(params.requests_count):
         stat = connection_stat()
-        conn = httplib.HTTPConnection(params.host, params.port)
+        try:
+            conn = httplib.HTTPConnection(params.host, params.port)
+        except Exception as e:
+            print("%s" %str(e))
+            sys.exit(2)
+
         t0 = time.time()
         conn.connect()
         t1 = time.time()
@@ -143,7 +173,7 @@ def http_test(params, ret):
         t2 = time.time()
         response = conn.getresponse()
         t3 = time.time()
-        response.read()
+        doc = response.read()
         t4 = time.time()
         conn.close()
         if time.time() > params.timeout + ret.begin_time \
@@ -155,6 +185,10 @@ def http_test(params, ret):
         stat.time = t4 - t0
         ret.stats.append(stat)
         ret.cur_count += 1
+        ret.done += 1
+        ret.doc_len = len(doc)
+        ret.total_doc_len += ret.doc_len
+        ret.server_software = response.msg['Server']
 
 
 def test(params):
@@ -164,8 +198,10 @@ def test(params):
     coroutines = []
     for i in xrange(params.concurrency):
         coroutines.append(gevent.spawn(http_test, params, ret))
+ 
     gevent.joinall(coroutines)
 
+    ret.end()
     return ret
 
 
@@ -200,6 +236,8 @@ def usage(prog_name=program_name):
 
 def main():
     args = arguments(sys.argv[1:])
+    print_version()
+    print("\nBenchmarking %s (be patient)\n" % args.host)
     ab_ret = test(args)
     ab_ret.print_result(args)
 
