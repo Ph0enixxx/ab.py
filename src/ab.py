@@ -2,18 +2,14 @@
 import getopt
 import sys
 import re
-import select
+import gevent
+import httplib
+import time
 
 program_name = ''
 program_info = '%s is python port of ab' % program_name
 version = '0.0.1'
 copyright = 'Copyright 2015 tom zhao'
-
-
-# control the connectins
-class connections(object):
-    def __init__(self):
-        pass
 
 
 # the cmd input arguments.
@@ -31,8 +27,11 @@ class arguments(object):
         self.keep_alive = False
         self.print_version = False
         self.print_usage = False
+        self.url = ""
+        self.method = "GET"
         # parse the argv..
         self.arguments_parse(argv)
+        self.parse_url()
 
     def check_arguments(self):
         if self.concurrency > self.requests_count:
@@ -41,9 +40,24 @@ class arguments(object):
         # invalid url
         if self.concurrency < 0:
             error_handler("Invalid concurrency")
-        p = re.compile('^http://[\d\-a-zA-Z]+(\.[\d\-a-zA-Z]+)*/.*')
-        if not p.match(self.url):
-            error_handler("invalid URL")
+
+    def parse_url(self):
+        double_slash_pos = self.url.find("://")
+        d = {"http":80, "https":443}
+        self.port = d.get(self.url[:double_slash_pos])
+        if not self.port:
+            self.port = 80
+        
+        domain_path = self.url[7:]
+        pos_start_pos = domain_path.find("/")
+        self.path = domain_path[pos_start_pos:]
+        domain_path = domain_path[:pos_start_pos]
+        colon_pos = domain_path.find(":")
+        if colon_pos > 0:
+            self.host = domain_path[:colon_pos]
+            self.port = int(domain_path[colon_pos+1:])
+        else:
+            self.host = domain_path
 
     def arguments_parse(self, argv):
         """
@@ -100,25 +114,58 @@ class arguments(object):
         self.check_arguments()
 
 
-class connection_times(object):
+class connection_stat(object):
     __slots__ = ('start_time', 'wait_time', 'con_time', 'time')
     # start_time   time of starting the connection
     # wait_time     time of between request and response.
     # connect_time   time to connect
     # time           time for connection
 
-
 # the result of test
 class ab_result(object):
     def __init__(self):
-        pass
+        self.stats = []
+        self.cur_count = 0
+        self.begin_time = time.time()
 
-    def print_result(params):
-        pass
+    def print_result(self, params):
+        print self.stats
+        print self.cur_count
+
+def http_test(params, ret):
+    for i in xrange(params.requests_count):
+        stat = connection_stat()
+        conn = httplib.HTTPConnection(params.host, params.port)
+        t0 = time.time()
+        conn.connect()
+        t1 = time.time()
+        conn.request(params.method, params.path)
+        t2 = time.time()
+        response = conn.getresponse()
+        t3 = time.time()
+        response.read()
+        t4 = time.time()
+        conn.close()
+        if time.time() > params.timeout + ret.begin_time \
+              or ret.cur_count >= params.requests_count:
+            break
+        stat.start_time = t0
+        stat.wait_time = t4 - t1
+        stat.con_time = t1 - t0
+        stat.time = t4 - t0
+        ret.stats.append(stat)
+        ret.cur_count += 1
 
 
 def test(params):
+    '''the ab.py main processing function'''
+
     ret = ab_result()
+    coroutines = []
+    for i in xrange(params.concurrency):
+        coroutines.append(gevent.spawn(http_test, params, ret))
+    gevent.joinall(coroutines)
+
     return ret
 
 
@@ -154,7 +201,7 @@ def usage(prog_name=program_name):
 def main():
     args = arguments(sys.argv[1:])
     ab_ret = test(args)
-    ab_ret.print_result()
+    ab_ret.print_result(args)
 
 if __name__ == '__main__':
     program_name = sys.argv[0]
