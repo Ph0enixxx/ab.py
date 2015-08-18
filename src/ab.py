@@ -9,6 +9,7 @@ import gevent
 import httplib
 import time
 import socket
+import math
 
 from gevent import monkey
 monkey.patch_all()
@@ -148,7 +149,7 @@ class ab_result(object):
         times = [stat.time for stat in self.stats]
         req_time = sum(times) / len(times) * 1000
         avg_req_time = all_time / self.done*1000
-        transfer_rate = self.total_doc_len /all_time
+        transfer_rate = self.total_doc_len / all_time
 
         print("")
         print("Server Software:        {0}".format(self.server_software))
@@ -167,8 +168,10 @@ class ab_result(object):
         print("")
         print("Requests per second:    %.2f [#/sec] (mean)" % req_per_sec)
         print("Time per request:       %.2f [ms] (mean)" % req_time)
-        print("Time per request:       %.2f [ms] (mean, across all concurrent requests)" % avg_req_time)
-        print("Transfer rate:          %.2f [Kbytes/sec] received" % (transfer_rate/1024))
+        print("Time per request:       %.2f [ms] (mean, across all requests)"
+              % avg_req_time)
+        print("Transfer rate:          %.2f [Kbytes/sec] received"
+              % (transfer_rate/1024))
         print("")
         print("Connection Times (ms)")
         # statistics
@@ -180,28 +183,34 @@ class ab_result(object):
         times_sort = sorted(times)
         min_time = times_sort[0] * 1000
         max_time = times_sort[len(times_sort) - 1] * 1000
-        med_time = (min_time + max_time)
+        med_time = times_sort[len(times_sort) / 2]
         avg_time = req_time
+        sdts = [(time_ - med_time)**2 for time_ in times_sort]
+        sdt = math.sqrt(sum(sdts))
 
         wait_times_sort = sorted(wait_times)
-        avg_wait_time = sum(wait_times)/ len(wait_times) * 1000
+        avg_wait_time = sum(wait_times) / len(wait_times) * 1000
         min_wait_time = wait_times_sort[0] * 1000
         max_wait_time = wait_times_sort[len(wait_times_sort) - 1] * 1000
-        med_wait_time = (min_wait_time + max_wait_time) / 2
+        med_wait_time = wait_times_sort[len(wait_times_sort) / 2]
+        sdwaits = [(time_ - med_wait_time)**2 for time_ in wait_times_sort]
+        sdwait = math.sqrt(sum(sdwaits))
 
         connect_times_sort = sorted(connect_times)
-        avg_connect_time = sum(connect_times) / len(connect_times) * 1000
-        min_connect_time = connect_times_sort[0] * 1000
-        max_connect_time = connect_times_sort[len(connect_times_sort) - 1] * 1000
-        med_connect_time = (min_connect_time + max_connect_time) / 2        
+        avg_con_time = sum(connect_times) / len(connect_times) * 1000
+        min_con_time = connect_times_sort[0] * 1000
+        max_con_time = connect_times_sort[len(connect_times_sort) - 1] * 1000
+        med_con_time = connect_times_sort[len(connect_times_sort) / 2]
+        sdcons = [(time_ - med_con_time)**2 for time_ in connect_times_sort]
+        sdcon = math.sqrt(sum(sdcons))
 
         print("               min  mean[+/-sd] median   max")
-        print("Connect:        %.1f    %.1f    %0.1f     %0.1f" 
-               % (min_connect_time, med_connect_time, avg_connect_time, max_connect_time))
-        print("Waiting:        %.1f    %.1f    %0.1f     %0.1f"
-               % (min_wait_time, med_wait_time, avg_wait_time, max_wait_time))
-        print("Total:          %.1f    %.1f    %0.1f     %0.1f"
-               %(min_time, med_time, avg_time, max_time))
+        print("Connect:    %5.1f %5.1f %5.1f %5.1f %5.1f"
+              % (min_con_time, avg_con_time, sdcon, med_con_time, max_con_time))
+        print("Waiting:    %5.1f %5.1f %5.1f %5.1f %5.1f"
+              % (min_wait_time, avg_wait_time, sdwait, med_wait_time, max_wait_time))
+        print("Total:      %5.1f %5.1f %5.1f %5.1f %5.1f"
+              % (min_time, avg_time, sdt, med_time, max_time))
 
     def end(self):
         self.end_time = time.time()
@@ -216,6 +225,7 @@ def get_headers(params):
     if params.keep_alive:
         headers["Keep-alive"] = ""
     return headers
+
 
 def print_process(params, done, is_over=False):
     global process_mark
