@@ -232,7 +232,8 @@ def get_headers(params):
     headers = {"Content-type": "text/plain"}
     headers["Content-type"] = params.content_type
     if params.keep_alive:
-        headers["Keep-alive"] = ""
+        # https://tools.ietf.org/html/rfc2068
+        headers["Connection"] = "Keep-Alive"
     return headers
 
 
