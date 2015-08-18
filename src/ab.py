@@ -1,18 +1,25 @@
 #!/usr/bin/python
+# encoding: utf-8
+from __future__ import unicode_literals
+
 import getopt
 import sys
 import re
 import gevent
 import httplib
 import time
+import socket
+
+from gevent import monkey
+monkey.patch_all()
 
 program_name = ''
 program_info = '%s is python port of ab' % program_name
 version = '0.0.1'
 copyright = 'Copyright 2015 tom zhao'
 
-from gevent import monkey
-monkey.patch_socket()
+# global for coroutines sync print process
+process_mark = []
 
 
 # the cmd input arguments.
@@ -23,15 +30,15 @@ class arguments(object):
     def __init__(self, argv):
         self.requests_count = 1
         self.concurrency = 1
-        self.timelimit = 0
         self.timeout = 30
-        self.windowsize = 0
         self.content_type = "text/plain"
         self.keep_alive = False
         self.print_version = False
         self.print_usage = False
         self.url = ""
         self.method = "GET"
+        self.https = False
+        self.heartbeatres = 100
         # parse the argv..
         self.arguments_parse(argv)
         self.parse_url()
@@ -46,11 +53,14 @@ class arguments(object):
 
     def parse_url(self):
         double_slash_pos = self.url.find("://")
-        d = {"http":80, "https":443}
-        self.port = d.get(self.url[:double_slash_pos])
+        d = {"http": 80, "https": 443}
+        protocal = self.url[:double_slash_pos]
+        if protocal == "https":
+            self.https = True
+        self.port = d.get(protocal)
         if not self.port:
             self.port = 80
-        
+
         domain_path = self.url[7:]
         pos_start_pos = domain_path.find("/")
         self.path = domain_path[pos_start_pos:]
@@ -67,7 +77,7 @@ class arguments(object):
         process the cmd arguments
         """
         try:
-            opts, args = getopt.getopt(argv, "n:c:t:s:T:Vh", [])
+            opts, args = getopt.getopt(argv, "n:c:s:T:Vkh", [])
         except getopt.GetoptError as err:
             print("ab.py: wrong number of arguments")
             usage()
@@ -84,12 +94,6 @@ class arguments(object):
                     self.concurrency = int(val)
                 except:
                     error_handler("invalid number of concurrency [%s]" % val)
-            if arg == "-t":
-                try:
-                    self.timelimit = int(val)
-                except:
-                    error_handler("invalid number of timelimit [%s]" % val)
-
             if arg == "-s":
                 try:
                     self.timeout = int(val)
@@ -124,6 +128,7 @@ class connection_stat(object):
     # connect_time   time to connect
     # time           time for connection
 
+
 # the result of test
 class ab_result(object):
     def __init__(self):
@@ -138,6 +143,13 @@ class ab_result(object):
         self.server_software = ""
 
     def print_result(self, params):
+        all_time = self.end_time - self.begin_time
+        req_per_sec = self.done / all_time
+        times = [stat.time for stat in self.stats]
+        req_time = sum(times) / len(times) * 1000
+        avg_req_time = all_time / self.done*1000
+        transfer_rate = self.total_doc_len /all_time
+
         print("")
         print("Server Software:        {0}".format(self.server_software))
         print("Server Hostname:        {0}".format(params.host))
@@ -147,48 +159,116 @@ class ab_result(object):
         print("Document Length:        {0}".format(self.doc_len))
         print("")
         print("Concurrency Level:      {0}".format(params.concurrency))
-        print("Time taken for tests:   {0} seconds".format(self.end_time - self.begin_time))
+        print("Time taken for tests:   {0} seconds".format(all_time))
         print("Complete requests:      {0}".format(self.done))
         print("Failed requests:        {0}".format(self.failed))
         print("Write errors:           {0}".format(self.failed))
         print("HTML transferred:       {0} bytes".format(self.total_doc_len))
+        print("")
+        print("Requests per second:    %.2f [#/sec] (mean)" % req_per_sec)
+        print("Time per request:       %.2f [ms] (mean)" % req_time)
+        print("Time per request:       %.2f [ms] (mean, across all concurrent requests)" % avg_req_time)
+        print("Transfer rate:          %.2f [Kbytes/sec] received" % (transfer_rate/1024))
+        print("")
+        print("Connection Times (ms)")
+        # statistics
+        # wait_time     time of between request and response.
+        wait_times = [stat.wait_time for stat in self.stats]
+        # connect_time   time to connect
+        connect_times = [stat.con_time for stat in self.stats]
+
+        times_sort = sorted(times)
+        min_time = times_sort[0] * 1000
+        max_time = times_sort[len(times_sort) - 1] * 1000
+        med_time = (min_time + max_time)
+        avg_time = req_time
+
+        wait_times_sort = sorted(wait_times)
+        avg_wait_time = sum(wait_times)/ len(wait_times) * 1000
+        min_wait_time = wait_times_sort[0] * 1000
+        max_wait_time = wait_times_sort[len(wait_times_sort) - 1] * 1000
+        med_wait_time = (min_wait_time + max_wait_time) / 2
+
+        connect_times_sort = sorted(connect_times)
+        avg_connect_time = sum(connect_times) / len(connect_times) * 1000
+        min_connect_time = connect_times_sort[0] * 1000
+        max_connect_time = connect_times_sort[len(connect_times_sort) - 1] * 1000
+        med_connect_time = (min_connect_time + max_connect_time) / 2        
+
+        print("               min  mean[+/-sd] median   max")
+        print("Connect:        %.1f    %.1f    %0.1f     %0.1f" 
+               % (min_connect_time, med_connect_time, avg_connect_time, max_connect_time))
+        print("Waiting:        %.1f    %.1f    %0.1f     %0.1f"
+               % (min_wait_time, med_wait_time, avg_wait_time, max_wait_time))
+        print("Total:          %.1f    %.1f    %0.1f     %0.1f"
+               %(min_time, med_time, avg_time, max_time))
 
     def end(self):
         self.end_time = time.time()
 
 
+def get_headers(params):
+    """
+    make http headers according to command parameter
+    """
+    headers = {"Content-type": "text/plain"}
+    headers["Content-type"] = params.content_type
+    if params.keep_alive:
+        headers["Keep-alive"] = ""
+    return headers
+
+def print_process(params, done, is_over=False):
+    global process_mark
+    if params.heartbeatres and not done % params.heartbeatres:
+        if done not in process_mark:
+            process_mark.append(done)
+            print("Completed %d requests" % done)
+    if is_over:
+        print("Finish %d requests" % done)
+
+
 def http_test(params, ret):
+    """coroutine function"""
+    headers = get_headers(params)
+    if not params.https:
+        conn = httplib.HTTPConnection(params.host, params.port)
+    else:
+        conn = httplib.HTTPSConnection(params.host, params.port)
+
     for i in xrange(params.requests_count):
+        # end the requests
+        if time.time() > params.timeout + ret.begin_time \
+                or ret.cur_count >= params.requests_count:
+            break
+
+        ret.cur_count += 1
         stat = connection_stat()
+        t0 = time.time()
         try:
-            conn = httplib.HTTPConnection(params.host, params.port)
+            conn.connect()
         except Exception as e:
-            print("%s" %str(e))
+            print("%s %s" % (program_name, str(e)))
             sys.exit(2)
 
-        t0 = time.time()
-        conn.connect()
         t1 = time.time()
-        conn.request(params.method, params.path)
+        conn.request(params.method, params.path, headers=headers)
         t2 = time.time()
         response = conn.getresponse()
         t3 = time.time()
         doc = response.read()
         t4 = time.time()
         conn.close()
-        if time.time() > params.timeout + ret.begin_time \
-              or ret.cur_count >= params.requests_count:
-            break
+
         stat.start_time = t0
         stat.wait_time = t4 - t1
         stat.con_time = t1 - t0
         stat.time = t4 - t0
         ret.stats.append(stat)
-        ret.cur_count += 1
         ret.done += 1
         ret.doc_len = len(doc)
         ret.total_doc_len += ret.doc_len
         ret.server_software = response.msg['Server']
+        print_process(params, ret.cur_count)
 
 
 def test(params):
@@ -198,9 +278,10 @@ def test(params):
     coroutines = []
     for i in xrange(params.concurrency):
         coroutines.append(gevent.spawn(http_test, params, ret))
- 
+
     gevent.joinall(coroutines)
 
+    print_process(params, ret.cur_count, True)
     ret.end()
     return ret
 
@@ -221,14 +302,13 @@ def usage(prog_name=program_name):
     print("""
     -n requests     Number of requests to perform
     -c concurrency  Number of multiple requests to make at a time
-    -t timelimit    Seconds to max. to spend on benchmarking
-                    This implies -n 50000
     -s timeout      Seconds to max. wait for each response
                     Default is 30 seconds
-    -b windowsize   Size of TCP send/receive buffer, in bytes
     -T content-type Content-type header to use for POST/PUT data, eg.
                     'application/x-www-form-urlencoded'
                     Default is 'text/plain'
+    -V              Print version number and exit
+    -q              Do not show progress when doing more than 150 requests
     -k              Use HTTP KeepAlive feature
     -h              Display usage information (this message)
     """)
