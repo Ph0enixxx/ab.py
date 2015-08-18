@@ -5,6 +5,11 @@ ab (aka apache benchmark) is widely-used tool for benching http server.<br/>
 now I rebuild the software in python, while it 's works on *Uinx.<br/>
 it base on gevent and httplib power.
 
+###Requisite
+the library gevent is needed.
+if you has pip installed on your computer,just execute the command like that on Linux:
+sudo pip install gevent
+
 
 
 ###Usage
