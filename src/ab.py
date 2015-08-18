@@ -40,6 +40,7 @@ class arguments(object):
         self.method = "GET"
         self.https = False
         self.heartbeatres = 100
+        self.request_body = None
         # parse the argv..
         self.arguments_parse(argv)
         self.parse_url()
@@ -78,7 +79,7 @@ class arguments(object):
         process the cmd arguments
         """
         try:
-            opts, args = getopt.getopt(argv, "n:c:s:T:Vkh", [])
+            opts, args = getopt.getopt(argv, "n:c:s:T:p:Vkh", [])
         except getopt.GetoptError as err:
             print("ab.py: wrong number of arguments")
             usage()
@@ -109,6 +110,14 @@ class arguments(object):
                 self.print_version = True
             if arg == "-k":
                 self.keep_alive = True
+            if arg == "-p":
+                self.method = "POST"
+                try:
+                    with open(val, 'r', encoding='utf-8') as infile:
+                        self.request_body = infile.read()
+                except Exception as e:
+                    error_handler("Could not open POST data file (%s): No such \
+                                   file or directory" % val, False)
 
         if len(args) == 1:
             self.url = args[0]
@@ -261,7 +270,7 @@ def http_test(params, ret):
             sys.exit(2)
 
         t1 = time.time()
-        conn.request(params.method, params.path, headers=headers)
+        conn.request(params.method, params.path, params.request_body, headers=headers)
         t2 = time.time()
         response = conn.getresponse()
         t3 = time.time()
@@ -296,9 +305,10 @@ def test(params):
     return ret
 
 
-def error_handler(tip):
+def error_handler(tip, with_usage = True):
     print("%s: %s" % (program_name, tip))
-    usage()
+    if with_usage:
+        usage()
     sys.exit(2)
 
 
@@ -314,6 +324,7 @@ def usage(prog_name=program_name):
     -c concurrency  Number of multiple requests to make at a time
     -s timeout      Seconds to max. wait for each response
                     Default is 30 seconds
+    -p postfile     File containing data to POST. Remember also to set -T
     -T content-type Content-type header to use for POST/PUT data, eg.
                     'application/x-www-form-urlencoded'
                     Default is 'text/plain'
